@@ -1,0 +1,34 @@
+# Plan: Server API routes for text embedding & Qdrant search
+
+## Overview
+- PUT `/` — receive {t: text, g: gender, a: age}, embed with Gemini, save to Qdrant
+- POST `/` — receive {t: text, g: gender, i: minage, x: maxage}, embed text, search Qdrant
+
+## Steps
+
+### ✓ 1. Install dependencies
+- `npm i @google/generative-ai @qdrant/js-client-rest` ✓
+
+### ✓ 2. Create `src/lib/server/embed.ts`
+- Export `embed(text)` using Gemini `text-embedding-004` model ✓
+
+### ✓ 3. Create `src/lib/server/db.ts`
+- Export `upsert_point(id, vector, payload)` — saves to Qdrant collection 'i' ✓
+- Export `search(qVector, filter)` — with gender match + age range filter ✓
+
+### ✓ 4. Create `.env` (from ../i/chess/.env)
+- GEMINI, QDRANT_URL, QDRANT_KEY copied ✓
+
+### ✓ 5. Create `src/routes/+server.ts`
+- **PUT /** — parse {t,g,a}, embed, upsert with random UUID, return {ok:true} ✓
+- **POST /** — parse {t,g,i,x}, embed, search with filter, return results ✓
+
+### ✓ 6. Write unit tests
+- `src/lib/server/embed.spec.ts` — 1 test (embed returns vector) ✓
+- `src/lib/server/db.spec.ts` — 5 tests (upsert, gender filter, age filter, no filter, results) ✓
+- `src/lib/server/api-routes.spec.ts` — 2 tests (PUT, POST handlers) ✓
+
+### ✓ 7. Verify
+- `npm run lint` — passes ✓
+- `npm run test:unit -- --run` — 10/10 pass ✓
+- `npm run check` — pre-existing errors only in generated output ✓
