@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# bootstrap.sh — run ONCE on a fresh Oracle Cloud Ubuntu VM (as root or with sudo)
+# bootstrap.sh — run ONCE on Oracle Cloud Ubuntu VM (as root / with sudo)
 #
 # Usage:
 #   ./bootstrap.sh yourdomain.com github.com/youruser/yourrepo GH_PAT
-#
-#   GH_PAT = GitHub Personal Access Token (classic, repo scope)
-#            Create one at github.com/settings/tokens
 
 DOMAIN="${1:?Usage: $0 yourdomain.com github.com/user/repo GH_PAT}"
 REPO="${2:?Usage: $0 yourdomain.com github.com/user/repo GH_PAT}"
 PAT="${3:?Usage: $0 yourdomain.com github.com/user/repo GH_PAT}"
 
-echo "==> Installing Node.js 22 LTS"
-curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-apt install -y nodejs
-node --version
+echo "==> Installing Deno"
+curl -fsSL https://deno.land/install.sh | sh
+export DENO_INSTALL="$HOME/.deno"
+export PATH="$DENO_INSTALL/bin:$PATH"
+echo 'export DENO_INSTALL="$HOME/.deno"' >> ~ri/.profile
+echo 'export PATH="$DENO_INSTALL/bin:$PATH"' >> ~ri/.profile
+ln -sf "$DENO_INSTALL/bin/deno" /usr/local/bin/deno
+deno --version
 
 echo "==> Creating ri user"
 id ri 2>/dev/null || useradd -m -s /bin/bash ri
@@ -24,27 +25,16 @@ echo "==> Cloning repo"
 mkdir -p /opt/ri-server
 git clone "https://x-access-token:${PAT}@${REPO}.git" /opt/ri-server
 cd /opt/ri-server
-
-echo "==> Storing PAT for auto-updates (deploy.sh)"
-echo "$PAT" > .git_pat
-chmod 400 .git_pat
-chown ri:ri .git_pat
-
-# rewrite origin URL so future pulls don't need to re-auth
 git remote set-url origin "https://x-access-token:${PAT}@${REPO}.git"
-
-echo "==> Installing npm dependencies"
-cd /opt/ri-server/server
-npm install --production
 
 echo "==> Writing deploy.sh"
 cat > /opt/ri-server/deploy.sh << 'DPL'
 #!/usr/bin/env bash
 set -euo pipefail
+export DENO_INSTALL="$HOME/.deno"
+export PATH="$DENO_INSTALL/bin:$PATH"
 cd /opt/ri-server
 git pull
-cd server
-npm install --production
 systemctl restart ri-server
 echo "deploy ok: $(date)"
 DPL
@@ -52,7 +42,6 @@ chmod +x /opt/ri-server/deploy.sh
 
 echo "==> Generating SSH key for GitHub Actions"
 mkdir -p /opt/ri-server/.ssh
-rm -f /opt/ri-server/.ssh/actions_key*
 ssh-keygen -t ed25519 -f /opt/ri-server/.ssh/actions_key -N "" -C "github-actions"
 mkdir -p ~ri/.ssh
 cat /opt/ri-server/.ssh/actions_key.pub >> ~ri/.ssh/authorized_keys
@@ -73,7 +62,7 @@ Type=simple
 User=ri
 Group=ri
 WorkingDirectory=/opt/ri-server/server
-ExecStart=/usr/bin/node index.js
+ExecStart=/usr/local/bin/deno run --allow-net --allow-env index.ts
 Restart=always
 RestartSec=5
 Environment=PORT=8080
@@ -100,37 +89,23 @@ echo "  SERVER DEPLOYED"
 echo ""
 echo "  Oracle VM IP: $MY_IP"
 echo ""
-echo "== Cloudflare DNS (do this now) =="
+echo "== Cloudflare DNS =="
 echo "  Dashboard → DNS → Add A record:"
-echo "    Name: ws"
-echo "    IPv4: $MY_IP"
-echo "    Proxy: Proxied (orange cloud)"
+echo "    Name: ws  |  IPv4: $MY_IP  |  Proxy: Proxied"
 echo ""
-echo "== Cloudflare Workers domain (do this now) =="
-echo "  Dashboard → Workers & Pages → ri → Domains"
-echo "  → Add Custom Domain: $DOMAIN"
-echo ""
-echo "  OR add to wrangler.jsonc and redeploy:"
-echo '    "routes": [{"pattern": "'"$DOMAIN"'","custom_domain":true}]'
-echo "  Then: npm run build && npx wrangler deploy"
+echo "== Cloudflare Workers domain =="
+echo "  Dashboard → Workers & Pages → ri → Domains → Add: $DOMAIN"
 echo ""
 echo "== Workers env var =="
-echo "  Dashboard → ri → Settings → Variables → Add:"
+echo "  Dashboard → ri → Settings → Variables:"
 echo "    PUBLIC_WS_URL = wss://ws.$DOMAIN"
 echo ""
-echo "== GitHub Secrets (for auto-deploy) =="
-echo "  Your repo → Settings → Secrets and variables → Actions"
-echo "  Add these 3 secrets:"
-echo ""
+echo "== GitHub Secrets (repo → Settings → Actions) =="
 echo "    ORACLE_HOST = $MY_IP"
 echo "    ORACLE_USER = ri"
 echo "    ORACLE_SSH_KEY = (paste below)"
 echo ""
-echo "-------- ORACLE_SSH_KEY (private key, copy this) --------"
+echo "-------- ORACLE_SSH_KEY --------"
 cat /opt/ri-server/.ssh/actions_key
-echo "-------- END ORACLE_SSH_KEY --------"
-echo ""
-echo "  Done. Delete this key from your clipboard after saving."
-echo ""
-echo "  Next pushes to main that touch server/ will auto-deploy."
+echo "-------- END --------"
 echo "============================================"

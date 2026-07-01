@@ -1,0 +1,9 @@
+{
+	"tasks": {
+		"dev": "deno task dev:server & deno task dev:client",
+		"dev:server": "mkdir -p dev-logs && deno run --watch --allow-net --allow-env server/index.ts 2>&1 | tee dev-logs/server.log",
+		"dev:client": "mkdir -p dev-logs && npm run dev 2>&1 | tee dev-logs/client.log",
+		"build": "npm run build",
+		"deploy": "npm run build && wrangler deploy"
+	}
+}

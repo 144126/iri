@@ -1,11 +1,8 @@
 {
 	"name": "ri-server",
 	"private": true,
-	"type": "module",
 	"scripts": {
-		"start": "node index.js"
-	},
-	"dependencies": {
-		"ws": "^8.18.0"
+		"start": "deno run --allow-net --allow-env index.ts",
+		"dev": "deno run --watch --allow-net --allow-env index.ts"
 	}
 }
